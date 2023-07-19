@@ -3,12 +3,111 @@ version: "3.8"
 networks:
   airbyte_public:
   airbyte_internal:
+  zrb:
 
 configs:
   airbyte_flags:
     file: ./airbyte/flags.yml
 
 services:
+
+
+  #############################################################################
+  # REDPANDA
+  #############################################################################
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v22.3.11
+    container_name: myapp_redpanda
+    hostname: redpanda
+    # Redpanda docker configuration: https://docs.redpanda.com/docs/reference/docker-compose/#configure-redpanda-in-docker
+    # Redpanda node configuration example: https://docs.redpanda.com/docs/reference/node-configuration-sample/
+    command:
+    - redpanda
+    - start
+    - --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+    - --advertise-kafka-addr PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
+    - --pandaproxy-addr PLAINTEXT://0.0.0.0:28082,OUTSIDE://0.0.0.0:8082
+    - --advertise-pandaproxy-addr PLAINTEXT://redpanda:28082,OUTSIDE://localhost:8082
+    - --rpc-addr 0.0.0.0:33145
+    - --advertise-rpc-addr redpanda:33145
+    - --smp 1
+    - --memory 1G
+    - --mode dev-container
+    - --default-log-level=warn
+    - --set sasl_mechanism=${KAFKA_SASL_MECHANISM}
+    - --set sasl_username=${KAFKA_SASL_USER}
+    - --set sasl_password=${KAFKA_SASL_PASS}
+    ports:
+    - ${KAFKA_EXTERNAL_HOST_PORT:-9092}:9092
+    - ${KAFKA_INTERNAL_HOST_PORT:-29092}:29092
+    - ${PANDAPROXY_EXTERNAL_HOST_PORT:-8082}:8082
+    - ${PANDAPROXY_INTERNAL_HOST_PORT:-28082}:28082
+    environment:
+      KAFKA_SASL_MECHANISM: ${KAFKA_SASL_MECHANISM:-SCRAM-SHA-256}
+      KAFKA_SASL_USER: ${KAFKA_SASL_USER:-admin}
+      KAFKA_SASL_PASS: ${KAFKA_SASL_PASS:-admin}
+    restart: unless-stopped
+    profiles:
+    - kafka
+    healthcheck:
+      test: [CMD, redpanda, admin, check]
+      interval: 5s
+      timeout: 1s
+      retries: 30
+    networks:
+    - zrb
+
+
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.2.2
+    container_name: myapp_redpanda_console
+    hostname: redpanda-console
+    ports:
+    - ${REDPANDA_CONSOLE_HOST_PORT:-9000}:8080
+    environment:
+      KAFKA_BROKERS: redpanda:29092
+    profiles:
+    - kafka
+    depends_on:
+    - redpanda
+    restart: unless-stopped
+    networks:
+    - zrb
+
+
+  #############################################################################
+  # POSTGRE
+  #############################################################################
+
+  postgresql:
+    image: postgres:15.2
+    container_name: myapp_postgresql
+    hostname: postgresql
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+      POSTGRES_DB: ${POSTGRES_DB:-myapp}
+    volumes:
+    - ./postgres-data:/var/lib/postgresql/data
+    ports:
+    - ${POSTGRES_HOST_PORT:-5432}:5432
+    networks:
+    - zrb
+
+
+  #############################################################################
+  # CLICKHOUSE
+  #############################################################################
+  ch_server:
+    image: yandex/clickhouse-server
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./clickhouse:/var/lib/clickhouse
+    networks:
+        - zrb
 
   #############################################################################
   # AIRBYTE
