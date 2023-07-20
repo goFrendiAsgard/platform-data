@@ -3,7 +3,7 @@ version: "3.8"
 networks:
   airbyte_public:
   airbyte_internal:
-  zrb:
+  data_platform:
 
 configs:
   airbyte_flags:
@@ -56,7 +56,7 @@ services:
       timeout: 1s
       retries: 30
     networks:
-    - zrb
+    - data_platform
 
 
   redpanda-console:
@@ -73,7 +73,7 @@ services:
     - redpanda
     restart: unless-stopped
     networks:
-    - zrb
+    - data_platform
 
 
   #############################################################################
@@ -94,7 +94,7 @@ services:
     ports:
     - ${POSTGRES_HOST_PORT:-5432}:5432
     networks:
-    - zrb
+    - data_platform
 
 
   #############################################################################
@@ -104,12 +104,13 @@ services:
     image: yandex/clickhouse-server
     container_name: clickhouse-server
     hostname: clickhouse-server
+    restart: unless-stopped
     ports:
       - "8123:8123"
     volumes:
       - ./clickhouse:/var/lib/clickhouse
     networks:
-        - zrb
+        - data_platform
 
   #############################################################################
   # METABASE
@@ -118,6 +119,7 @@ services:
     image: metabase/metabase:v0.46.6.1-latest-patch
     container_name: metabase
     hostname: metabase
+    restart: unless-stopped
     volumes:
     - /dev/urandom:/dev/random:ro
     ports:
@@ -130,7 +132,7 @@ services:
       MB_DB_PASS: ${MB_POSTGRES_PASSWORD:-admin}
       MB_DB_HOST: metabase-postgres
     networks:
-      - zrb
+      - data_platform
     healthcheck:
       test: curl --fail -I http://localhost:3000/api/health || exit 1
       interval: 15s
@@ -141,12 +143,13 @@ services:
     image: postgres:15.2
     container_name: metabase-postgres
     hostname: metabase-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${MB_POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${MB_POSTGRES_PASSWORD:-admin}
       POSTGRES_DB: metabase
     networks:
-      - zrb
+      - data_platform
 
 
   #############################################################################
@@ -156,21 +159,22 @@ services:
   
   # hook in case we need to add init behavior
   # every root service (no depends_on) should depend on init
-  airbyte_init:
+  airbyte-init:
     image: airbyte/init:${AIRBYTE_VERSION:-0.50.7}
     logging:
       options:
         max-size: "100m"
         max-file: "5"
       driver: json-file
-    container_name: airbyte_init
+    container_name: airbyte-init
     command: /bin/sh -c "./scripts/create_mount_directories.sh /local_parent ${AIRBYTE_HACK_LOCAL_ROOT_PARENT:-/tmp} ${AIRBYTE_LOCAL_ROOT:-/tmp/airbyte_local}"
     environment:
       - LOCAL_ROOT=${AIRBYTE_LOCAL_ROOT:-/tmp/airbyte_local}
       - HACK_LOCAL_ROOT_PARENT=${AIRBYTE_HACK_LOCAL_ROOT_PARENT:-/tmp}
     volumes:
       - ${AIRBYTE_HACK_LOCAL_ROOT_PARENT:-/tmp}:/local_parent
-  bootloader:
+
+  airbyte-bootloader:
     image: airbyte/bootloader:${AIRBYTE_VERSION:-0.50.7}
     logging:
       options:
@@ -181,17 +185,17 @@ services:
     environment:
       - AIRBYTE_VERSION=${AIRBYTE_VERSION:-0.50.7}
       - DATABASE_PASSWORD=${AIRBYTE_DATABASE_PASSWORD:-docker}
-      - DATABASE_URL=${AIRBYTE_DATABASE_URL:-jdbc:postgresql://db:5432/airbyte}
+      - DATABASE_URL=${AIRBYTE_DATABASE_URL:-jdbc:postgresql://airbyte-db:5432/airbyte}
       - DATABASE_USER=${AIRBYTE_DATABASE_USER:-docker}
       - LOG_LEVEL=${AIRBYTE_LOG_LEVEL:-INFO}
       - LOCAL_CONNECTOR_CATALOG_PATH=${AIRBYTE_LOCAL_CONNECTOR_CATALOG_PATH:-}
     networks:
       - airbyte_internal
     depends_on:
-      airbyte_init:
+      airbyte-init:
         condition: service_completed_successfully
 
-  db:
+  airbyte-db:
     image: airbyte/db:${AIRBYTE_VERSION:-0.50.7}
     logging:
       options:
@@ -205,7 +209,7 @@ services:
       - CONFIG_DATABASE_URL=${AIRBYTE_CONFIG_DATABASE_URL:-}
       - CONFIG_DATABASE_USER=${AIRBYTE_CONFIG_DATABASE_USER:-}
       - DATABASE_PASSWORD=${AIRBYTE_DATABASE_PASSWORD:-docker}
-      - DATABASE_URL=${AIRBYTE_DATABASE_URL:-jdbc:postgresql://db:5432/airbyte}
+      - DATABASE_URL=${AIRBYTE_DATABASE_URL:-jdbc:postgresql://airbyte-db:5432/airbyte}
       - DATABASE_USER=${AIRBYTE_DATABASE_USER:-docker}
       - POSTGRES_PASSWORD=${AIRBYTE_DATABASE_PASSWORD:-docker}
       - POSTGRES_USER=${AIRBYTE_DATABASE_USER:-docker}
@@ -213,7 +217,8 @@ services:
       - ${AIRBYTE_DB_DOCKER_MOUNT:-./airbyte/db}:/var/lib/postgresql/data
     networks:
       - airbyte_internal
-  worker:
+
+  airbyte-worker:
     image: airbyte/worker:${AIRBYTE_VERSION:-0.50.7}
     logging:
       options:
@@ -231,7 +236,7 @@ services:
       - CONFIGS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION=${AIRBYTE_CONFIGS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION:-0.40.23.002}
       - CONFIG_ROOT=${AIRBYTE_CONFIG_ROOT:-/data}
       - DATABASE_PASSWORD=${AIRBYTE_DATABASE_PASSWORD:-docker}
-      - DATABASE_URL=${AIRBYTE_DATABASE_URL:-jdbc:postgresql://db:5432/airbyte}
+      - DATABASE_URL=${AIRBYTE_DATABASE_URL:-jdbc:postgresql://airbyte-db:5432/airbyte}
       - DATABASE_USER=${AIRBYTE_DATABASE_USER:-docker}
       - DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
       - FEATURE_FLAG_CLIENT=${AIRBYTE_FEATURE_FLAG_CLIENT:-config}
@@ -289,7 +294,7 @@ services:
     networks:
       - airbyte_internal
     depends_on:
-      bootloader:
+      airbyte-bootloader:
         condition: service_completed_successfully
 
   airbyte-server:
@@ -310,7 +315,7 @@ services:
       - CONFIGS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION=${AIRBYTE_CONFIGS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION:-0.40.23.002}
       - CONFIG_ROOT=${AIRBYTE_CONFIG_ROOT:-/data}
       - DATABASE_PASSWORD=${AIRBYTE_DATABASE_PASSWORD:-docker}
-      - DATABASE_URL=${AIRBYTE_DATABASE_URL:-jdbc:postgresql://db:5432/airbyte}
+      - DATABASE_URL=${AIRBYTE_DATABASE_URL:-jdbc:postgresql://airbyte-db:5432/airbyte}
       - DATABASE_USER=${AIRBYTE_DATABASE_USER:-docker}
       - FEATURE_FLAG_CLIENT=${AIRBYTE_FEATURE_FLAG_CLIENT:-config}
       - LAUNCHDARKLY_KEY=${LAUNCHDARKLY_KEY}
@@ -345,7 +350,7 @@ services:
     networks:
       - airbyte_internal
     depends_on:
-      bootloader:
+      airbyte-bootloader:
         condition: service_completed_successfully
 
   airbyte-webapp:
@@ -356,6 +361,7 @@ services:
         max-file: "5"
       driver: json-file
     container_name: airbyte-webapp
+    hostname: airbyte-webapp
     restart: unless-stopped
     ports:
       - "80"
@@ -366,7 +372,7 @@ services:
     networks:
       - airbyte_internal
     depends_on:
-      bootloader:
+      airbyte-bootloader:
         condition: service_completed_successfully
 
   airbyte-temporal:
@@ -384,7 +390,7 @@ services:
       - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development.yaml
       - LOG_LEVEL=${AIRBYTE_LOG_LEVEL:-INFO}
       - POSTGRES_PWD=${AIRBYTE_DATABASE_PASSWORD:-docker}
-      - POSTGRES_SEEDS=${AIRBYTE_DATABASE_HOST:-db}
+      - POSTGRES_SEEDS=${AIRBYTE_DATABASE_HOST:-airbyte-db}
       - POSTGRES_USER=${AIRBYTE_DATABASE_USER:-docker}
     volumes:
       - ./airbyte/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig
@@ -404,7 +410,7 @@ services:
       - AIRBYTE_VERSION=${AIRBYTE_VERSION:-0.50.7}
       - CONFIGS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION=${AIRBYTE_CONFIGS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION:-0.40.23.002}
       - DATABASE_PASSWORD=${AIRBYTE_DATABASE_PASSWORD:-docker}
-      - DATABASE_URL=${AIRBYTE_DATABASE_URL:-jdbc:postgresql://db:5432/airbyte}
+      - DATABASE_URL=${AIRBYTE_DATABASE_URL:-jdbc:postgresql://airbyte-db:5432/airbyte}
       - DATABASE_USER=${AIRBYTE_DATABASE_USER:-docker}
       - DEPLOYMENT_MODE=${DEPLOYMENT_MODE}
       - LOG_LEVEL=${AIRBYTE_LOG_LEVEL:-INFO}
@@ -420,7 +426,7 @@ services:
     networks:
       - airbyte_internal
     depends_on:
-      bootloader:
+      airbyte-bootloader:
         condition: service_completed_successfully
 
   airbyte-connector-builder-server:
@@ -442,7 +448,7 @@ services:
     networks:
       - airbyte_internal
     depends_on:
-      bootloader:
+      airbyte-bootloader:
         condition: service_completed_successfully
 
   airbyte-proxy:
