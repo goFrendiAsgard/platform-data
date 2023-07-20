@@ -18,7 +18,7 @@ services:
 
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v22.3.11
-    container_name: myapp_redpanda
+    container_name: redpanda
     hostname: redpanda
     # Redpanda docker configuration: https://docs.redpanda.com/docs/reference/docker-compose/#configure-redpanda-in-docker
     # Redpanda node configuration example: https://docs.redpanda.com/docs/reference/node-configuration-sample/
@@ -61,7 +61,7 @@ services:
 
   redpanda-console:
     image: docker.redpanda.com/redpandadata/console:v2.2.2
-    container_name: myapp_redpanda_console
+    container_name: redpanda-console
     hostname: redpanda-console
     ports:
     - ${REDPANDA_CONSOLE_HOST_PORT:-9000}:8080
@@ -82,13 +82,13 @@ services:
 
   postgresql:
     image: postgres:15.2
-    container_name: myapp_postgresql
+    container_name: postgresql
     hostname: postgresql
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
-      POSTGRES_DB: ${POSTGRES_DB:-myapp}
+      POSTGRES_DB: ${POSTGRES_DB:-mydb}
     volumes:
     - ./postgres-data:/var/lib/postgresql/data
     ports:
@@ -100,8 +100,10 @@ services:
   #############################################################################
   # CLICKHOUSE
   #############################################################################
-  ch_server:
+  clickhouse-server:
     image: yandex/clickhouse-server
+    container_name: clickhouse-server
+    hostname: clickhouse-server
     ports:
       - "8123:8123"
     volumes:
@@ -110,20 +112,58 @@ services:
         - zrb
 
   #############################################################################
+  # METABASE
+  #############################################################################
+  metabase:
+    image: metabase/metabase:v0.46.6.1-latest-patch
+    container_name: metabase
+    hostname: metabase
+    volumes:
+    - /dev/urandom:/dev/random:ro
+    ports:
+      - 3000:3000
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: 5432
+      MB_DB_USER: ${MB_POSTGRES_USER:-postgres}
+      MB_DB_PASS: ${MB_POSTGRES_PASSWORD:-admin}
+      MB_DB_HOST: metabase-postgres
+    networks:
+      - zrb
+    healthcheck:
+      test: curl --fail -I http://localhost:3000/api/health || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  metabase-postgres:
+    image: postgres:15.2
+    container_name: metabase-postgres
+    hostname: metabase-postgres
+    environment:
+      POSTGRES_USER: ${MB_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${MB_POSTGRES_PASSWORD:-admin}
+      POSTGRES_DB: metabase
+    networks:
+      - zrb
+
+
+  #############################################################################
   # AIRBYTE
   #############################################################################
 
   
   # hook in case we need to add init behavior
   # every root service (no depends_on) should depend on init
-  init:
+  airbyte_init:
     image: airbyte/init:${AIRBYTE_VERSION:-0.50.7}
     logging:
       options:
         max-size: "100m"
         max-file: "5"
       driver: json-file
-    container_name: init
+    container_name: airbyte_init
     command: /bin/sh -c "./scripts/create_mount_directories.sh /local_parent ${AIRBYTE_HACK_LOCAL_ROOT_PARENT:-/tmp} ${AIRBYTE_LOCAL_ROOT:-/tmp/airbyte_local}"
     environment:
       - LOCAL_ROOT=${AIRBYTE_LOCAL_ROOT:-/tmp/airbyte_local}
@@ -148,7 +188,7 @@ services:
     networks:
       - airbyte_internal
     depends_on:
-      init:
+      airbyte_init:
         condition: service_completed_successfully
 
   db:
@@ -252,7 +292,7 @@ services:
       bootloader:
         condition: service_completed_successfully
 
-  server:
+  airbyte-server:
     image: airbyte/server:${AIRBYTE_VERSION:-0.50.7}
     logging:
       options:
@@ -308,7 +348,7 @@ services:
       bootloader:
         condition: service_completed_successfully
 
-  webapp:
+  airbyte-webapp:
     image: airbyte/webapp:${AIRBYTE_VERSION:-0.50.7}
     logging:
       options:
@@ -421,5 +461,5 @@ services:
       - airbyte_internal
       - airbyte_public
     depends_on:
-      - webapp
-      - server
+      - airbyte-webapp
+      - airbyte-server
