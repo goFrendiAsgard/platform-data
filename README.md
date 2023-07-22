@@ -139,6 +139,15 @@ First, we want to create a table named `voting` and populate it with some data.
 ./reset.sh
 ```
 
+## I have conflicting container names
+
+You can change all containers prefixes by setting `CONTAINER_PREFIX` variable.
+
+```bash
+export CONTAINER_PREFIX=alta # Or whatever you like
+docker compose up
+```
+
 ## I have conflicting ports
 
 You can set the following variables:
