@@ -1,0 +1,13 @@
+# https://docs.getdbt.com/docs/core/connect-data-platform/clickhouse-setup
+my_profile:
+  target: my_target
+  outputs:
+    my_target:
+      type: clickhouse
+      schema: "{{ env_var('CLICKHOUSE_SCHEMA', 'analytics') }}"
+      user: "{{ env_var('CLICKHOUSE_USER', 'clickhouse') }}"
+      password: "{{ env_var('CLICKHOUSE_PASSWORD', 'admin') }}"
+      #optional fields
+      port: 8123
+      host: "{{ env_var('CLICKHOUSE_HOST', 'localhost') }}"
+      

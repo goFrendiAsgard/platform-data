@@ -1,0 +1,30 @@
+version: 2
+
+sources:
+  - name: mydb
+    database: mydb
+
+    tables:
+      - name: voting
+        identifier: voting
+
+
+models:
+  - name: voting
+    description: Voting table, enchanced with day bucket
+    columns:
+      - name: id
+        description: The primary key
+        tests:
+          - unique
+          - not_null
+
+  - name: daily_voting
+    description: Voting table, enchanced with day bucket
+    columns:
+      - name: day_bucket
+        description: day of voting
+      - name: candidate
+        description: candidate
+      - name: vote_count
+        description: vote count for a candidate in a day

@@ -130,6 +130,17 @@ First, we want to create a table named `voting` and populate it with some data.
     - Sync Mode: `Incremental | Deduped + History`
     - Cursor Field: `vote_time`
     - Primary Key: `id`
+- Synchronize the connection, verify that your voting data has been copied to Clickhouse
+
+## Setup DBT
+
+```bash
+cd airflow
+source prepare.sh
+
+cd dags/dbt_project
+dbt run
+```
 
 # Troubleshooting
 
