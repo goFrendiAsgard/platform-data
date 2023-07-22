@@ -1,6 +1,7 @@
 #!/bin/bash
 
 docker compose down
+docker volume prune
 
 sudo rm -Rf airbyte/data
 sudo rm -Rf airbyte/db

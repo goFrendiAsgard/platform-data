@@ -78,6 +78,7 @@ services:
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v22.3.11
     hostname: redpanda
+    container_name: ${CONTAINER_PREFIX:-my}-redpanda
     # Redpanda docker configuration: https://docs.redpanda.com/docs/reference/docker-compose/#configure-redpanda-in-docker
     # Redpanda node configuration example: https://docs.redpanda.com/docs/reference/node-configuration-sample/
     command:
@@ -121,6 +122,7 @@ services:
   redpanda-console:
     image: docker.redpanda.com/redpandadata/console:v2.2.2
     hostname: redpanda-console
+    container_name: ${CONTAINER_PREFIX:-my}-redpanda-console
     ports:
     - ${REDPANDA_CONSOLE_HOST_PORT:-8081}:8080
     environment:
@@ -141,6 +143,7 @@ services:
   postgresql:
     image: postgres:15.2
     hostname: postgresql
+    container_name: ${CONTAINER_PREFIX:-my}-postgresql
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -160,6 +163,7 @@ services:
   clickhouse-server:
     image: yandex/clickhouse-server
     hostname: clickhouse-server
+    container_name: ${CONTAINER_PREFIX:-my}-clickhouse-server
     restart: unless-stopped
     environment:
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
@@ -179,6 +183,7 @@ services:
   metabase:
     image: metabase/metabase:v0.46.6.1-latest-patch
     hostname: metabase
+    container_name: ${CONTAINER_PREFIX:-my}-metabase
     restart: unless-stopped
     volumes:
     - /dev/urandom:/dev/random:ro
@@ -205,6 +210,7 @@ services:
   metabase-postgres:
     image: postgres:15.2
     hostname: metabase-postgres
+    container_name: ${CONTAINER_PREFIX:-my}-metabase-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${MB_POSTGRES_USER:-postgres}
@@ -227,6 +233,7 @@ services:
     image: airbyte/init:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
     hostname: airbyte-init
+    container_name: ${CONTAINER_PREFIX:-my}-airbyte-init
     command: /bin/sh -c "./scripts/create_mount_directories.sh /local_parent ${AIRBYTE_HACK_LOCAL_ROOT_PARENT:-/tmp} ${AIRBYTE_LOCAL_ROOT:-/tmp/airbyte_local}"
     environment:
     - LOCAL_ROOT=${AIRBYTE_LOCAL_ROOT:-/tmp/airbyte_local}
@@ -238,6 +245,7 @@ services:
     image: airbyte/bootloader:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
     hostname: airbyte-bootloader
+    container_name: ${CONTAINER_PREFIX:-my}-airbyte-bootloader
     environment:
     - AIRBYTE_VERSION=${AIRBYTE_VERSION:-0.50.7}
     - DATABASE_PASSWORD=${AIRBYTE_DATABASE_PASSWORD:-docker}
@@ -255,6 +263,7 @@ services:
     image: airbyte/db:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
     hostname: airbyte-db
+    container_name: ${CONTAINER_PREFIX:-my}-airbyte-db
     restart: unless-stopped
     environment:
     - CONFIG_DATABASE_PASSWORD=${AIRBYTE_CONFIG_DATABASE_PASSWORD:-}
@@ -274,6 +283,7 @@ services:
     image: airbyte/worker:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
     hostname: airbyte-worker
+    container_name: ${CONTAINER_PREFIX:-my}-airbyte-worker
     restart: unless-stopped
     environment:
     - AIRBYTE_VERSION=${AIRBYTE_VERSION:-0.50.7}
@@ -350,6 +360,7 @@ services:
     image: airbyte/server:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
     hostname: airbyte-server
+    container_name: ${CONTAINER_PREFIX:-my}-airbyte-server
     restart: unless-stopped
     environment:
     - AIRBYTE_ROLE=${AIRBYTE_ROLE:-}
@@ -403,6 +414,7 @@ services:
     image: airbyte/webapp:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
     hostname: airbyte-webapp
+    container_name: ${CONTAINER_PREFIX:-my}-airbyte-webapp
     restart: unless-stopped
     ports:
     - "${AIRBYTE_WEBAPP_HOST_PORT:-0}:80"
@@ -420,6 +432,7 @@ services:
     image: airbyte/temporal:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
     hostname: airbyte-temporal
+    container_name: ${CONTAINER_PREFIX:-my}-airbyte-temporal
     restart: unless-stopped
     environment:
     - DB=postgresql
@@ -438,6 +451,7 @@ services:
     image: airbyte/cron:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
     hostname: airbyte-cron
+    container_name: ${CONTAINER_PREFIX:-my}-airbyte-cron
     restart: unless-stopped
     environment:
     - AIRBYTE_VERSION=${AIRBYTE_VERSION:-0.50.7}
@@ -466,6 +480,7 @@ services:
     image: airbyte/connector-atelier-server:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
     hostname: airbyte-connector-builder-server
+    container_name: ${CONTAINER_PREFIX:-my}-airbyte-connector-builder-server
     restart: unless-stopped
     ports:
     - 80
@@ -483,6 +498,7 @@ services:
   airbyte-proxy:
     image: airbyte/proxy:${AIRBYTE_VERSION:-0.50.7}
     hostname: airbyte-proxy
+    container_name: ${CONTAINER_PREFIX:-my}-airbyte-proxy
     restart: unless-stopped
     ports:
     - "${AIRBYTE_PROXY_HOST_PORT:-8000}:8000"
@@ -507,6 +523,7 @@ services:
   airflow-postgres:
     image: postgres:15.2
     hostname: airflow-postgres
+    container_name: ${CONTAINER_PREFIX:-my}-airflow-postgres
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
@@ -525,6 +542,7 @@ services:
   airflow-redis:
     image: redis:6.0.20
     hostname: airflow-redis
+    container_name: ${CONTAINER_PREFIX:-my}-airflow-redis
     expose:
     - 6379
     healthcheck:
@@ -540,6 +558,7 @@ services:
   airflow-webserver:
     <<: *airflow-common
     hostname: airflow-webserver
+    container_name: ${CONTAINER_PREFIX:-my}-airflow-webserver
     command: webserver
     ports:
     - "${AIRFLOW_HOST_PORT:-8080}:8080"
@@ -558,6 +577,7 @@ services:
   airflow-scheduler:
     <<: *airflow-common
     hostname: airflow-scheduler
+    container_name: ${CONTAINER_PREFIX:-my}-airflow-scheduler
     command: scheduler
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
@@ -574,6 +594,7 @@ services:
   airflow-worker:
     <<: *airflow-common
     hostname: airflow-worker
+    container_name: ${CONTAINER_PREFIX:-my}-airflow-worker
     command: celery worker
     healthcheck:
       test:
@@ -600,6 +621,7 @@ services:
   airflow-triggerer:
     <<: *airflow-common
     hostname: airflow-triggerer
+    container_name: ${CONTAINER_PREFIX:-my}-airflow-triggerer
     command: triggerer
     healthcheck:
       test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
@@ -616,6 +638,7 @@ services:
   airflow-init:
     <<: *airflow-common
     hostname: airflow-init
+    container_name: ${CONTAINER_PREFIX:-my}-airflow-init
     entrypoint: /bin/bash
     # yamllint disable rule:line-length
     command:
@@ -695,6 +718,7 @@ services:
   airflow-cli:
     <<: *airflow-common
     hostname: airflow-cli
+    container_name: ${CONTAINER_PREFIX:-my}-airflow-cli
     profiles:
     - debug
     environment:
@@ -712,6 +736,7 @@ services:
   airflow-flower:
     <<: *airflow-common
     hostname: airflow-flower
+    container_name: ${CONTAINER_PREFIX:-my}-airflow-flower
     command: celery flower
     profiles:
     - flower
@@ -728,4 +753,3 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
-
