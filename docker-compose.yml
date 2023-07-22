@@ -12,6 +12,17 @@ configs:
   airbyte_flags:
     file: ./airbyte/flags.yml
 
+volumes:
+  airbyte_workspace:
+    name: ${AIRBYTE_WORKSPACE_DOCKER_MOUNT:-airbyte_workspace}
+  # the data volume is only needed for backward compatibility; when users upgrade
+  # from an old Airbyte version that relies on file-based configs, the server needs
+  # to read this volume to copy their configs to the database
+  airbyte_data:
+    name: ${AIRBYTE_DATA_DOCKER_MOUNT:-airbyte_data}
+  airbyte_db:
+    name: ${AIRBYTE_DB_DOCKER_MOUNT:-airbyte_db}
+
 x-airbyte-logging: &default-airbyte-logging
   options:
     max-size: "100m"
@@ -64,10 +75,8 @@ services:
   #############################################################################
   # REDPANDA
   #############################################################################
-
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v22.3.11
-    container_name: redpanda
     hostname: redpanda
     # Redpanda docker configuration: https://docs.redpanda.com/docs/reference/docker-compose/#configure-redpanda-in-docker
     # Redpanda node configuration example: https://docs.redpanda.com/docs/reference/node-configuration-sample/
@@ -111,7 +120,6 @@ services:
 
   redpanda-console:
     image: docker.redpanda.com/redpandadata/console:v2.2.2
-    container_name: redpanda-console
     hostname: redpanda-console
     ports:
     - ${REDPANDA_CONSOLE_HOST_PORT:-8081}:8080
@@ -132,7 +140,6 @@ services:
 
   postgresql:
     image: postgres:15.2
-    container_name: postgresql
     hostname: postgresql
     restart: unless-stopped
     environment:
@@ -152,7 +159,6 @@ services:
   #############################################################################
   clickhouse-server:
     image: yandex/clickhouse-server
-    container_name: clickhouse-server
     hostname: clickhouse-server
     restart: unless-stopped
     environment:
@@ -172,7 +178,6 @@ services:
   #############################################################################
   metabase:
     image: metabase/metabase:v0.46.6.1-latest-patch
-    container_name: metabase
     hostname: metabase
     restart: unless-stopped
     volumes:
@@ -193,14 +198,12 @@ services:
       test: curl --fail -I http://localhost:3000/api/health || exit 1
       interval: 15s
       timeout: 5s
-      retries: 5
+      retries: 50
     depends_on:
-      metabase-postgres:
-        condition: service_completed_successfully
+    - metabase-postgres
 
   metabase-postgres:
     image: postgres:15.2
-    container_name: metabase-postgres
     hostname: metabase-postgres
     restart: unless-stopped
     environment:
@@ -223,7 +226,6 @@ services:
   airbyte-init:
     image: airbyte/init:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
-    container_name: airbyte-init
     hostname: airbyte-init
     command: /bin/sh -c "./scripts/create_mount_directories.sh /local_parent ${AIRBYTE_HACK_LOCAL_ROOT_PARENT:-/tmp} ${AIRBYTE_LOCAL_ROOT:-/tmp/airbyte_local}"
     environment:
@@ -235,7 +237,6 @@ services:
   airbyte-bootloader:
     image: airbyte/bootloader:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
-    container_name: airbyte-bootloader
     hostname: airbyte-bootloader
     environment:
     - AIRBYTE_VERSION=${AIRBYTE_VERSION:-0.50.7}
@@ -253,7 +254,6 @@ services:
   airbyte-db:
     image: airbyte/db:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
-    container_name: airbyte-db
     hostname: airbyte-db
     restart: unless-stopped
     environment:
@@ -266,14 +266,13 @@ services:
     - POSTGRES_PASSWORD=${AIRBYTE_DATABASE_PASSWORD:-docker}
     - POSTGRES_USER=${AIRBYTE_DATABASE_USER:-docker}
     volumes:
-    - ${AIRBYTE_DB_DOCKER_MOUNT:-./airbyte/db}:/var/lib/postgresql/data
+    - ./airbyte/db:/var/lib/postgresql/data
     networks:
     - airbyte_internal
 
   airbyte-worker:
     image: airbyte/worker:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
-    container_name: airbyte-worker
     hostname: airbyte-worker
     restart: unless-stopped
     environment:
@@ -336,10 +335,10 @@ services:
     - airbyte_flags
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
-    - ${AIRBYTE_WORKSPACE_DOCKER_MOUNT:-./airbyte/workspace}:${AIRBYTE_WORKSPACE_ROOT:-/tmp/workspace}
+    - airbyte_workspace:${AIRBYTE_WORKSPACE_ROOT:-/tmp/workspace}
     - ${AIRBYTE_LOCAL_ROOT:-/tmp/airbyte_local}:${AIRBYTE_LOCAL_ROOT:-/tmp/airbyte_local}
     ports:
-    - "${AIRBYTE_WORKER_PORT:-0}:9000"
+    - "${AIRBYTE_WORKER_HOST_PORT:-0}:9000"
     networks:
     - data_platform
     - airbyte_internal
@@ -350,7 +349,6 @@ services:
   airbyte-server:
     image: airbyte/server:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
-    container_name: airbyte-server
     hostname: airbyte-server
     restart: unless-stopped
     environment:
@@ -387,12 +385,12 @@ services:
     - MAX_NOTIFY_WORKERS=5
     - SHOULD_RUN_NOTIFY_WORKFLOWS=${AIRBYTE_SHOULD_RUN_NOTIFY_WORKFLOWS:-true}
     ports:
-    - "${AIRBYTE_SERVER_PORT:-0}:8001"
+    - "${AIRBYTE_SERVER_HOST_PORT:-0}:8001"
     configs:
     - airbyte_flags
     volumes:
-    - ${AIRBYTE_WORKSPACE_DOCKER_MOUNT:-./airbyte/workspace}:${AIRBYTE_WORKSPACE_ROOT:-/tmp/workspace}
-    - ${AIRBYTE_DATA_DOCKER_MOUNT:-./airbyte/data}:${AIRBYTE_CONFIG_ROOT:-/data}
+    - airbyte_workspace:${AIRBYTE_WORKSPACE_ROOT:-/tmp/workspace}
+    - airbyte_data:${AIRBYTE_CONFIG_ROOT:-/data}
     - ${AIRBYTE_LOCAL_ROOT:-/tmp/airbyte_local}:${AIRBYTE_LOCAL_ROOT:-/tmp/airbyte_local}
     networks:
     - data_platform
@@ -404,11 +402,10 @@ services:
   airbyte-webapp:
     image: airbyte/webapp:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
-    container_name: airbyte-webapp
     hostname: airbyte-webapp
     restart: unless-stopped
     ports:
-    - "80"
+    - "${AIRBYTE_WEBAPP_HOST_PORT:-0}:80"
     environment:
     - INTERNAL_API_HOST=${AIRBYTE_INTERNAL_API_HOST:-airbyte-server:8001}
     - CONNECTOR_BUILDER_API_HOST=${AIRBYTE_CONNECTOR_BUILDER_API_HOST:-airbyte-connector-builder-server:80}
@@ -422,7 +419,6 @@ services:
   airbyte-temporal:
     image: airbyte/temporal:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
-    container_name: airbyte-temporal
     hostname: airbyte-temporal
     restart: unless-stopped
     environment:
@@ -441,7 +437,6 @@ services:
   airbyte-cron:
     image: airbyte/cron:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
-    container_name: airbyte-cron
     hostname: airbyte-cron
     restart: unless-stopped
     environment:
@@ -460,7 +455,7 @@ services:
     configs:
     - airbyte_flags
     volumes:
-    - ${AIRBYTE_WORKSPACE_DOCKER_MOUNT:-./airbyte/workspace}:${AIRBYTE_WORKSPACE_ROOT:-/tmp/workspace}
+    - airbyte_workspace:${AIRBYTE_WORKSPACE_ROOT:-/tmp/workspace}
     networks:
     - airbyte_internal
     depends_on:
@@ -470,7 +465,6 @@ services:
   airbyte-connector-builder-server:
     image: airbyte/connector-atelier-server:${AIRBYTE_VERSION:-0.50.7}
     logging: *default-airbyte-logging
-    container_name: airbyte-connector-builder-server
     hostname: airbyte-connector-builder-server
     restart: unless-stopped
     ports:
@@ -488,7 +482,6 @@ services:
 
   airbyte-proxy:
     image: airbyte/proxy:${AIRBYTE_VERSION:-0.50.7}
-    container_name: airbyte-proxy
     hostname: airbyte-proxy
     restart: unless-stopped
     ports:
@@ -513,7 +506,6 @@ services:
 
   airflow-postgres:
     image: postgres:15.2
-    container_name: airflow-postgres
     hostname: airflow-postgres
     environment:
       POSTGRES_USER: airflow
@@ -532,7 +524,6 @@ services:
 
   airflow-redis:
     image: redis:6.0.20
-    container_name: airflow-redis
     hostname: airflow-redis
     expose:
     - 6379
@@ -548,7 +539,6 @@ services:
 
   airflow-webserver:
     <<: *airflow-common
-    container_name: airflow-webserver
     hostname: airflow-webserver
     command: webserver
     ports:
@@ -567,7 +557,6 @@ services:
 
   airflow-scheduler:
     <<: *airflow-common
-    container_name: airflow-scheduler
     hostname: airflow-scheduler
     command: scheduler
     healthcheck:
@@ -584,7 +573,6 @@ services:
 
   airflow-worker:
     <<: *airflow-common
-    container_name: airflow-worker
     hostname: airflow-worker
     command: celery worker
     healthcheck:
@@ -611,7 +599,6 @@ services:
 
   airflow-triggerer:
     <<: *airflow-common
-    container_name: airflow-triggerer
     hostname: airflow-triggerer
     command: triggerer
     healthcheck:
@@ -628,7 +615,6 @@ services:
 
   airflow-init:
     <<: *airflow-common
-    container_name: airflow-init
     hostname: airflow-init
     entrypoint: /bin/bash
     # yamllint disable rule:line-length
@@ -649,7 +635,7 @@ services:
           echo
           exit 1
         fi
-        if [[ -z "${AIRFLOW_UID}" ]]; then
+        if [[ -z "${AIRFLOW_UID:-50000}" ]]; then
           echo
           echo -e "\033[1;33mWARNING!!!: AIRFLOW_UID not set!\e[0m"
           echo "If you are on Linux, you SHOULD follow the instructions below to set "
@@ -692,7 +678,7 @@ services:
           echo
         fi
         mkdir -p /sources/logs /sources/dags /sources/plugins
-        chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
+        chown -R "${AIRFLOW_UID:-50000}:0" /sources/{logs,dags,plugins}
         exec /entrypoint airflow version
     # yamllint enable rule:line-length
     environment:
@@ -704,11 +690,10 @@ services:
       _PIP_ADDITIONAL_REQUIREMENTS: ''
     user: "0:0"
     volumes:
-    - ${AIRFLOW_PROJ_DIR:-.}:/sources
+    - ./airflow:/sources
 
   airflow-cli:
     <<: *airflow-common
-    container_name: airflow-cli
     hostname: airflow-cli
     profiles:
     - debug
@@ -726,13 +711,12 @@ services:
   # See: https://docs.docker.com/compose/profiles/
   airflow-flower:
     <<: *airflow-common
-    container_name: airflow-flower
     hostname: airflow-flower
     command: celery flower
     profiles:
     - flower
     ports:
-    - "5555:5555"
+    - "${AIRFLOW_FLOWER_HOST_PORT:-5555}:5555"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
       interval: 30s
