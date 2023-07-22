@@ -132,17 +132,54 @@ First, we want to create a table named `voting` and populate it with some data.
     - Primary Key: `id`
 - Synchronize the connection, verify that your voting data has been copied to Clickhouse
 
-## Setup DBT
+## Setup and run DBT
 
 ```bash
-cd airflow
+cd airflow/dags
 source prepare.sh
 
-cd dags/dbt_project
+cd dbt_project
 dbt run
 ```
 
+After you run the DBT, there will be a new database in Clickhouse name `analytics`
+
+This database contains 2 tables:
+
+- `voting`: Contains enriched version of `mydb.voting`. We add new column named `day_bucket` to make grouping easier.
+- `daily_voting`: Per day voting data.
+
+## Visualize the data
+
+- Open metabase at `localhost:3000`
+- Choose `I will add my data later`
+- Add data source:
+    - Display name: analytics
+    - Host: host.docker.internal
+    - Port: 8123
+    - Username: clickhouse
+    - Password: admin
+    - Database Name: analytics
+- Make question, choose bar chart visualization
+- Add question to the dashboard
+
+![voting](voting-dashboard.png)
+
+## Create Orchestration
+
+Previously we have created an ETL and a visualization.
+
+To ensure the analytics data is relevant, you can create an orchestration using airflow.
+
+To do this, you need to go to `airflow/dags/` directory.
+
 # Troubleshooting
+
+## I need to rebuild my images
+
+```bash
+docker compose build --no-cache
+```
 
 ## I messed up with docker's volume, I want to start everything from scratch
 

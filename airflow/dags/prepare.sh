@@ -10,4 +10,4 @@ pip install -r requirements.txt
 # Set DBT profile directory.
 # Alternatively, you can pass --dbt-profiles-dir argument:
 # dbt run --profiles-dir ../dbt_profile
-export DBT_PROFILES_DIR=$(realpath ./dags/dbt_profile)
+export DBT_PROFILES_DIR=$(realpath ./dbt_profile)

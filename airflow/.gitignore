@@ -1,4 +1,4 @@
-plugins
-logs
-config
+/plugins
+/logs
+/config
 .venv

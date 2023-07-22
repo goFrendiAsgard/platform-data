@@ -1,6 +1,6 @@
 .venv
 .env
 __pycache__
-clickhouse
-postgres-data
-metabase
+/clickhouse
+/postgres-data
+/metabase
