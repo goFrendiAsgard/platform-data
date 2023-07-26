@@ -1,4 +1,5 @@
 /plugins
 /logs
 /config
+/postgres-data
 .venv

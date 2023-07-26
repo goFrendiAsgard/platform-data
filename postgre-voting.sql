@@ -1,3 +1,4 @@
+-- Create table
 create table mydb.public.voting (
     id serial primary key
     , vote_time timestamp not null
@@ -6,6 +7,7 @@ create table mydb.public.voting (
 );
 
 
+-- Populate values
 DO $$ 
 DECLARE
     start_date TIMESTAMP := NOW(); -- Replace with your desired start date
@@ -30,3 +32,14 @@ BEGIN
         start_date := start_date + INTERVAL '1 day'; -- Move to the next day
     END LOOP;
 END $$;
+
+-- Create view
+create view mydb.public.daily_voting as (
+    select
+        date_trunc('day', vote_time) as vote_day_bucket
+        , candidate
+        , count(1) as vote_count
+    from mydb.public.voting
+    group by vote_day_bucket, candidate
+    order by vote_day_bucket, candidate
+);
